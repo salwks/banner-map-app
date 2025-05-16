@@ -36,3 +36,24 @@
     transform: rotate(360deg);
   }
 }
+
+.email-link-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+}
+
+.email-link {
+  color: #333;
+  font-size: 14px;
+  z-index: 1000;
+  text-decoration: none;
+}
+
+.marker-count {
+  color: #333;
+  font-size: 20px;
+  font-weight: bold;
+  z-index: 1000;
+  padding: 6px 0;
+}
