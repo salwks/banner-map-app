@@ -1,5 +1,4 @@
 // src/components/InfoPopup.js
-
 import React, { useState, useEffect } from "react";
 
 export default function InfoPopup({
@@ -10,33 +9,46 @@ export default function InfoPopup({
   onRemove,
   onProblemChange,
 }) {
-  const [text, setText] = useState("");
+  // 로컬 상태 관리
+  const [localLocation, setLocalLocation] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [isProblem, setIsProblem] = useState(false);
+  const [localProblem, setLocalProblem] = useState(false);
+
   const isEditable = Boolean(marker.ephemeral);
 
+  // 마커가 변경될 때만 상태 초기화
   useEffect(() => {
-    setText(marker.location || "");
-    setIsProblem(marker.problem || false);
+    console.log("마커 변경됨: ", marker);
+    setLocalLocation(marker.location || "");
     setCommentText("");
-  }, [marker]);
+    setLocalProblem(marker.problem || false);
+  }, [marker.id]); // marker.id가 변경될 때만 실행 (다른 마커로 변경될 때만)
 
+  // 마커 ID가 없으면 렌더링하지 않음
   if (!marker.id) return null;
 
+  // 확인 버튼 클릭 핸들러
   const handleConfirm = () => {
-    if (!text.trim()) {
+    if (!localLocation.trim()) {
       alert("위치명을 입력해주세요.");
       return;
     }
 
-    // 생성 시 문제 상태도 함께 전달
+    const updatedData = {
+      location: localLocation,
+      problem: localProblem,
+    };
+
     if (isEditable) {
-      onCreate(marker.id, { location: text, problem: isProblem });
+      onCreate(marker.id, updatedData);
     } else {
-      onUpdate(marker.id, { location: text });
+      onUpdate(marker.id, updatedData);
     }
+
+    onClose();
   };
 
+  // 댓글 등록 핸들러
   const handleCommentSubmit = () => {
     if (!commentText.trim()) return;
     const comments = marker.comments || [];
@@ -44,49 +56,39 @@ export default function InfoPopup({
     setCommentText("");
   };
 
-  // 문제 상태 토글 핸들러
-  const handleProblemToggle = () => {
-    const newProblemState = !isProblem;
-    setIsProblem(newProblemState);
+  // 문제 상태 변경 핸들러
+  const handleProblemChange = (e) => {
+    const newProblemValue = e.target.checked;
 
-    // 상위 컴포넌트에 문제 상태 변경 알림
+    // 내부 상태만 업데이트
+    setLocalProblem(newProblemValue);
+
+    // 색상 변경을 위해 부모에게 알림
     if (onProblemChange) {
-      onProblemChange(marker.id, newProblemState);
+      onProblemChange(marker.id, newProblemValue);
     }
-
-    // 이미 저장된 마커인 경우 서버에도 업데이트
-    if (!isEditable) {
-      onUpdate(marker.id, { problem: newProblemState });
-    }
-  };
-
-  // 모든 클릭 이벤트가 전파되지 않도록 처리
-  const handleContainerClick = (e) => {
-    e.stopPropagation();
   };
 
   return (
-    <div style={{ minWidth: 240, padding: 10 }} onClick={handleContainerClick}>
+    <div style={{ minWidth: 240, padding: 10 }}>
       {isEditable ? (
         <div>
           <label htmlFor="marker-text">위치명:</label>
           <input
             id="marker-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            style={{ width: "100%" }}
+            value={localLocation}
+            onChange={(e) => setLocalLocation(e.target.value)}
+            style={{ width: "100%", marginBottom: "8px" }}
           />
 
-          {/* 문제발견 체크박스 */}
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center" }}>
-            <input
-              type="checkbox"
-              id="problem-checkbox"
-              checked={isProblem}
-              onChange={handleProblemToggle}
-            />
-            <label htmlFor="problem-checkbox" style={{ marginLeft: 4 }}>
-              문제발견
+          <div style={{ marginBottom: "8px" }}>
+            <label>
+              <input
+                type="checkbox"
+                checked={localProblem}
+                onChange={handleProblemChange}
+              />
+              문제 있음
             </label>
           </div>
 
@@ -99,23 +101,13 @@ export default function InfoPopup({
           >
             {onRemove && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove(marker.id);
-                }}
+                onClick={() => onRemove(marker.id)}
                 style={{ marginRight: 8 }}
               >
                 삭제
               </button>
             )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleConfirm();
-              }}
-            >
-              확인
-            </button>
+            <button onClick={handleConfirm}>확인</button>
           </div>
         </div>
       ) : (
@@ -127,25 +119,20 @@ export default function InfoPopup({
             </span>
           </p>
 
-          {/* 문제발견 체크박스 - 이미 저장된 마커에서도 표시 */}
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center" }}>
-            <input
-              type="checkbox"
-              id="problem-checkbox"
-              checked={isProblem}
-              onChange={handleProblemToggle}
-            />
-            <label htmlFor="problem-checkbox" style={{ marginLeft: 4 }}>
-              문제발견
+          <div style={{ marginTop: "4px" }}>
+            <label>
+              <input
+                type="checkbox"
+                checked={localProblem}
+                onChange={handleProblemChange}
+              />
+              문제 있음
             </label>
           </div>
 
           {onRemove && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(marker.id);
-              }}
+              onClick={() => onRemove(marker.id)}
               style={{ marginTop: 8 }}
             >
               삭제
@@ -191,7 +178,6 @@ export default function InfoPopup({
                 boxSizing: "border-box",
               }}
             />
-            {/* 입력박스 우측 글리프 */}
             <span
               style={{
                 position: "absolute",

@@ -18,8 +18,29 @@ import redMarker from "leaflet-color-markers/img/marker-icon-red.png";
 import redMarker2x from "leaflet-color-markers/img/marker-icon-2x-red.png";
 import markerShadow from "leaflet-color-markers/img/marker-shadow.png";
 // Admin password from environment
-const ADMIN_PWD =
-  process.env.REACT_APP_ADMIN_PASSWORD || "dongtanleejunseok123";
+const ADMIN_PWD = process.env.REACT_APP_ADMIN_PASSWORD;
+
+// 커스텀 아이콘 투명도 설정
+function createIcon(iconUrl, iconRetinaUrl, opacity = 1.0) {
+  return new L.Icon({
+    iconUrl: iconUrl,
+    iconRetinaUrl: iconRetinaUrl,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41],
+    className: `custom-marker-icon opacity-${Math.floor(opacity * 100)}`,
+  });
+}
+
+// 기본 마커 아이콘
+const blueIcon = createIcon(blueMarker, blueMarker2x, 1.0);
+const redIcon = createIcon(redMarker, redMarker2x, 1.0);
+
+// 임시 마커 아이콘 (70% 투명도)
+const blueIconTemp = createIcon(blueMarker, blueMarker2x, 0.7);
+const redIconTemp = createIcon(redMarker, redMarker2x, 0.7);
 
 // Fix default icon paths for React-Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -27,25 +48,6 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: require("leaflet/dist/images/marker-icon-2x.png"),
   iconUrl: require("leaflet/dist/images/marker-icon.png"),
   shadowUrl: require("leaflet/dist/images/marker-shadow.png"),
-});
-
-const blueIcon = new L.Icon({
-  iconUrl: blueMarker,
-  iconRetinaUrl: blueMarker2x,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-const redIcon = new L.Icon({
-  iconUrl: redMarker,
-  iconRetinaUrl: redMarker2x,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
 });
 
 // Fit map view to a 1km radius
@@ -58,43 +60,63 @@ function FitToRadius({ center }) {
   return null;
 }
 
-// 지도 클릭 이벤트 핸들러
-function MapClickHandler({ onAdd, selectedMarker, onClosePopup }) {
+// CSS 스타일 컴포넌트 - 투명도 스타일을 동적으로 추가
+function MarkerOpacityStyles() {
+  useEffect(() => {
+    // 이미 스타일이 있는지 확인
+    if (!document.getElementById("marker-opacity-styles")) {
+      const style = document.createElement("style");
+      style.id = "marker-opacity-styles";
+      style.innerHTML = `
+        .opacity-70 {
+          opacity: 0.7;
+        }
+        .opacity-100 {
+          opacity: 1.0;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    // 컴포넌트 언마운트 시 스타일 제거
+    return () => {
+      const style = document.getElementById("marker-opacity-styles");
+      if (style) {
+        style.remove();
+      }
+    };
+  }, []);
+
+  return null;
+}
+
+// Handle map clicks to add markers, ignore popups/buttons
+function MapClicker({ onAdd, isPopupOpen, addMarkerEnabled }) {
   useMapEvents({
     click(e) {
-      // 마커나 팝업을 클릭하는 경우는 무시
-      if (
-        e.originalEvent.target.closest(".leaflet-marker-icon") ||
-        e.originalEvent.target.closest(".leaflet-popup")
-      ) {
+      // 팝업이 열려있거나 마커 추가가 비활성화되어 있으면 새 마커를 추가하지 않음
+      if (isPopupOpen || !addMarkerEnabled) {
         return;
       }
 
-      // 선택된 마커가 있을 때는 팝업만 닫기
-      if (selectedMarker) {
-        onClosePopup();
-        return;
-      }
-
-      // 새 마커 추가
+      const tgt = e.originalEvent.target;
+      if (tgt.closest(".leaflet-popup") || tgt.closest("button")) return;
       onAdd({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
-
   return null;
 }
 
 export default function Map() {
   const [mapCenter, setMapCenter] = useState([37.4979, 127.0276]);
-  const [persistedMarkers, setPersistedMarkers] = useState([]);
-  const [ephemeralMarkers, setEphemeralMarkers] = useState([]);
+  const [dbMarkers, setDbMarkers] = useState([]); // DB에서 가져온 마커들
+  const [tempMarkers, setTempMarkers] = useState([]); // 임시 마커들
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const mapRef = useRef(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [addMarkerEnabled, setAddMarkerEnabled] = useState(true);
 
-  // 모든 마커를 계산 (임시 마커 + 저장된 마커)
-  const allMarkers = [...ephemeralMarkers, ...persistedMarkers];
+  const mapRef = useRef(null);
 
   // Geolocation
   useEffect(() => {
@@ -106,45 +128,42 @@ export default function Map() {
     }
   }, []);
 
-  // Poll persisted markers every 5 seconds
+  // selectedMarker가 변경될 때 팝업 상태 업데이트
   useEffect(() => {
-    const fetchMarkers = () => {
-      fetch("/api/markers")
-        .then((res) => res.json())
-        .then((data) => {
-          // 저장된 마커를 가져와서 상태 업데이트
-          const persisted = data.map((m) => ({
-            id: m._id,
-            position: m.position,
-            location: m.location,
-            comments: m.comments || [],
-            ephemeral: false,
-            problem: m.problem || false,
-          }));
-          setPersistedMarkers(persisted);
-        })
-        .catch((err) => {
-          console.error("Error fetching markers:", err);
-        });
-    };
+    setIsPopupOpen(selectedMarker !== null);
+  }, [selectedMarker]);
 
-    fetchMarkers();
-    const id = setInterval(fetchMarkers, 5000);
-    return () => clearInterval(id);
-  }, []); // 의존성 배열 비움
-
-  // 마커 선택 핸들러
-  const handleMarkerClick = (marker) => {
-    setSelectedMarker(marker);
+  // 마커 데이터 가져오기
+  const fetchMarkers = () => {
+    fetch("http://localhost:4000/api/markers")
+      .then((res) => res.json())
+      .then((data) => {
+        const persisted = data.map((m) => ({
+          id: m._id,
+          position: m.position,
+          location: m.location,
+          comments: m.comments || [],
+          ephemeral: false,
+          problem: m.problem || false,
+        }));
+        setDbMarkers(persisted);
+      })
+      .catch((err) => console.error("Error fetching markers:", err));
   };
 
-  // Add ephemeral marker
-  const handleAdd = ({ lat, lng }) => {
-    // 이미 선택된 마커가 있으면 새 마커 추가하지 않음
-    if (selectedMarker) return;
+  // 초기 마커 데이터 로드
+  useEffect(() => {
+    fetchMarkers();
 
-    const m = {
-      id: uuidv4(), // 임시 ID 생성
+    // 5초마다 마커 데이터 갱신
+    const intervalId = setInterval(fetchMarkers, 5000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // 임시 마커 추가
+  const handleAddMarker = ({ lat, lng }) => {
+    const newMarker = {
+      id: uuidv4(),
       position: [lat, lng],
       location: "",
       comments: [],
@@ -152,65 +171,35 @@ export default function Map() {
       problem: false,
     };
 
-    // 임시 마커 추가
-    setEphemeralMarkers((prev) => [...prev, m]);
-    setSelectedMarker(m);
+    setTempMarkers((prev) => [...prev, newMarker]);
+    setSelectedMarker(newMarker);
+    setAddMarkerEnabled(false); // 팝업이 열리면 마커 추가 비활성화
   };
 
-  // 팝업 닫기 핸들러
-  const handleClosePopup = () => {
-    setSelectedMarker(null);
-  };
+  // DB에 마커 생성
+  const handleCreateMarker = (id, { location, problem = false }) => {
+    const marker = tempMarkers.find((m) => m.id === id);
+    if (!marker) return;
 
-  // Create in DB
-  const handleCreate = (id, { location, problem }) => {
-    // 해당 ID를 가진 임시 마커 찾기
-    const m = ephemeralMarkers.find((x) => x.id === id);
-
-    if (!m) {
-      console.error("임시 마커를 찾을 수 없습니다:", id);
-      return;
-    }
-
-    fetch("/api/markers", {
+    fetch("http://localhost:4000/api/markers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        position: m.position,
+        position: marker.position,
         location,
-        comments: m.comments,
-        problem: problem || false,
+        comments: marker.comments || [],
+        problem,
       }),
     })
       .then((r) => r.json())
       .then((saved) => {
-        // 응답에서 저장된 마커의 정보를 가져옴
-        const updated = {
-          id: saved._id,
-          position: saved.position,
-          location: saved.location,
-          comments: saved.comments || [],
-          problem: saved.problem || false,
-          ephemeral: false,
-        };
+        // 임시 마커에서 제거
+        setTempMarkers((prev) => prev.filter((m) => m.id !== id));
 
-        // 임시 마커 제거
-        setEphemeralMarkers((prev) => prev.filter((x) => x.id !== id));
+        // 새 DB 마커 생성하지 않고 바로 fetchMarkers 호출
+        fetchMarkers();
 
-        // 즉시 저장된 마커 목록에 추가 (중복 방지)
-        setPersistedMarkers((prev) => {
-          // 이미 동일한 ID의 마커가 있는지 확인
-          const exists = prev.some((marker) => marker.id === updated.id);
-          if (exists) {
-            return prev.map((marker) =>
-              marker.id === updated.id ? updated : marker
-            );
-          } else {
-            return [...prev, updated];
-          }
-        });
-
-        // 선택된 마커 초기화
+        // 선택된 마커 제거 (팝업 닫기)
         setSelectedMarker(null);
       })
       .catch((err) => {
@@ -219,106 +208,79 @@ export default function Map() {
       });
   };
 
-  // Update in DB
-  const handleUpdate = (id, data) => {
-    fetch(`/api/markers/${id}`, {
+  // DB 마커 업데이트
+  const handleUpdateMarker = (id, data) => {
+    fetch(`http://localhost:4000/api/markers/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     })
       .then((r) => r.json())
-      .then((u) => {
-        const updated = {
-          id: u._id,
-          position: u.position,
-          location: u.location,
-          comments: u.comments || [],
-          problem: u.problem || false,
-          ephemeral: false,
-        };
-
-        // 로컬 상태 즉시 업데이트
-        setPersistedMarkers((prev) =>
-          prev.map((x) => (x.id === id ? updated : x))
-        );
-
-        // 선택된 마커 업데이트
-        if (selectedMarker && selectedMarker.id === id) {
-          setSelectedMarker(updated);
-        }
+      .then((updated) => {
+        // 업데이트된 마커를 바로 반영하지 않고 fetchMarkers 호출
+        fetchMarkers();
       })
       .catch((err) => {
         console.error("Error updating marker:", err);
+        alert("마커 업데이트 중 오류가 발생했습니다.");
       });
   };
 
-  // Remove marker
-  const handleRemove = (id) => {
-    // 먼저 삭제할 마커가 임시 마커인지 확인
-    const isEphemeral = ephemeralMarkers.some((m) => m.id === id);
-
-    if (isEphemeral) {
-      // 임시 마커라면 로컬에서만 삭제
-      setEphemeralMarkers((prev) => prev.filter((m) => m.id !== id));
+  // 마커 삭제
+  const handleRemoveMarker = (id) => {
+    // 임시 마커인 경우
+    const tempMarker = tempMarkers.find((m) => m.id === id);
+    if (tempMarker) {
+      setTempMarkers((prev) => prev.filter((m) => m.id !== id));
       setSelectedMarker(null);
+      setAddMarkerEnabled(true);
       return;
     }
 
-    // 서버에 저장된 마커라면 API 호출
-    fetch(`/api/markers/${id}`, { method: "DELETE" })
-      .then((response) => {
-        if (response.ok || response.status === 204) {
-          // 성공적으로 삭제됨 - 즉시 UI에서 제거
-          setPersistedMarkers((prev) => prev.filter((x) => x.id !== id));
-          setSelectedMarker(null);
-        } else {
-          throw new Error(`서버 응답 오류: ${response.status}`);
-        }
+    // DB 마커인 경우
+    fetch(`http://localhost:4000/api/markers/${id}`, { method: "DELETE" })
+      .then(() => {
+        // 삭제된 마커를 바로 반영하지 않고 fetchMarkers 호출
+        fetchMarkers();
+        setSelectedMarker(null);
+        setAddMarkerEnabled(true);
       })
       .catch((err) => {
         console.error("Error removing marker:", err);
-
-        // 오류 알림
-        alert("마커 삭제 중 오류가 발생했습니다. 나중에 다시 시도해 주세요.");
+        alert("마커 삭제 중 오류가 발생했습니다.");
       });
   };
 
-  // 문제 상태 변경 핸들러
-  const handleProblemChange = (markerId, isProblem) => {
-    // 마커가 임시 마커인지 확인
-    const ephemeralMarker = ephemeralMarkers.find((m) => m.id === markerId);
+  // 임시 마커의 problem 상태 변경 처리 (색상만 변경)
+  const handleProblemChange = (id, isProblem) => {
+    // 임시 마커인지 확인
+    const tempMarkerIndex = tempMarkers.findIndex((m) => m.id === id);
+    if (tempMarkerIndex >= 0) {
+      // 임시 마커일 경우 색상 변경용으로만 problem 값 변경
+      const updatedTempMarkers = [...tempMarkers];
+      updatedTempMarkers[tempMarkerIndex] = {
+        ...updatedTempMarkers[tempMarkerIndex],
+        problem: isProblem,
+      };
 
-    if (ephemeralMarker) {
-      // 임시 마커인 경우 상태 업데이트
-      setEphemeralMarkers((prev) =>
-        prev.map((m) => (m.id === markerId ? { ...m, problem: isProblem } : m))
-      );
+      setTempMarkers(updatedTempMarkers);
 
-      // 선택된 마커도 업데이트
-      if (selectedMarker && selectedMarker.id === markerId) {
+      // 선택된 마커도 업데이트 (InfoPopup이 리렌더링되지 않도록 할 필요는 없음)
+      if (selectedMarker && selectedMarker.id === id) {
         setSelectedMarker((prev) => ({
           ...prev,
           problem: isProblem,
         }));
       }
-    } else {
-      // 저장된 마커인 경우는 이미 InfoPopup 내에서 처리됨
-      // 여기서는 UI 상태만 업데이트
-      setPersistedMarkers((prev) =>
-        prev.map((m) => (m.id === markerId ? { ...m, problem: isProblem } : m))
-      );
 
-      // 선택된 마커도 업데이트
-      if (selectedMarker && selectedMarker.id === markerId) {
-        setSelectedMarker((prev) => ({
-          ...prev,
-          problem: isProblem,
-        }));
-      }
+      return;
     }
+
+    // DB 마커인 경우 API 호출
+    handleUpdateMarker(id, { problem: isProblem });
   };
 
-  // Handle coordinate search
+  // 위치명 검색
   const handleSearch = () => {
     const keyword = searchText.trim().toLowerCase();
     if (!keyword) {
@@ -327,39 +289,47 @@ export default function Map() {
     }
 
     // 모든 마커에서 검색
+    const allMarkers = [...tempMarkers, ...dbMarkers];
     const found = allMarkers.find(
       (m) => m.location && m.location.toLowerCase().includes(keyword)
     );
 
     if (found) {
       const [lat, lng] = found.position;
-      mapRef.current.setView([lat, lng], mapRef.current.getZoom());
+      if (mapRef.current) {
+        mapRef.current.setView([lat, lng], mapRef.current.getZoom());
+      }
     } else {
       alert(`위치명 에 "${searchText}"를 포함하는 마커가 없습니다.`);
     }
   };
 
-  // 마커 드래그 이벤트 처리
-  const handleMarkerDrag = (markerId, newPosition) => {
-    setEphemeralMarkers((prev) =>
-      prev.map((m) =>
-        m.id === markerId
-          ? { ...m, position: [newPosition.lat, newPosition.lng] }
-          : m
-      )
-    );
+  // 팝업 닫기 처리
+  const handlePopupClose = () => {
+    setSelectedMarker(null);
+    setIsPopupOpen(false);
+    setAddMarkerEnabled(true); // 팝업이 닫히면 마커 추가 다시 활성화
+  };
 
-    // 선택된 마커도 업데이트
-    if (selectedMarker && selectedMarker.id === markerId) {
-      setSelectedMarker((prev) => ({
-        ...prev,
-        position: [newPosition.lat, newPosition.lng],
-      }));
+  // 마커 아이콘 선택 함수
+  const getMarkerIcon = (marker) => {
+    if (marker.ephemeral) {
+      // 임시 마커는 70% 투명도
+      return marker.problem ? redIconTemp : blueIconTemp;
+    } else {
+      // 일반 마커는 100% 불투명
+      return marker.problem ? redIcon : blueIcon;
     }
   };
 
+  // 모든 마커 (임시 + DB)
+  const allMarkers = [...tempMarkers, ...dbMarkers];
+
   return (
     <>
+      {/* 투명도 스타일 적용 */}
+      <MarkerOpacityStyles />
+
       {/* Admin Mode Toggle and Search */}
       <div
         style={{
@@ -369,7 +339,6 @@ export default function Map() {
           zIndex: 1000,
           padding: "8px",
           borderRadius: "4px",
-          backgroundColor: "white",
         }}
       >
         <button
@@ -401,70 +370,61 @@ export default function Map() {
           </div>
         )}
       </div>
-
       <MapContainer
         center={mapCenter}
         zoom={13}
         style={{ height: "100vh", width: "100%" }}
-        whenCreated={(map) => {
-          mapRef.current = map;
-        }}
+        ref={mapRef}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <FitToRadius center={mapCenter} />
-
-        {/* 지도 클릭 이벤트 핸들러 */}
-        <MapClickHandler
-          onAdd={handleAdd}
-          selectedMarker={selectedMarker}
-          onClosePopup={handleClosePopup}
+        <MapClicker
+          onAdd={handleAddMarker}
+          isPopupOpen={isPopupOpen}
+          addMarkerEnabled={addMarkerEnabled}
         />
 
-        {/* 임시 마커 렌더링 */}
-        {ephemeralMarkers.map((m) => (
+        {allMarkers.map((marker) => (
           <Marker
-            key={`ephemeral-${m.id}`}
-            position={m.position}
-            draggable={true}
-            icon={m.problem ? redIcon : blueIcon}
+            key={marker.id}
+            position={marker.position}
+            draggable={marker.ephemeral}
+            icon={getMarkerIcon(marker)}
+            opacity={marker.ephemeral ? 0.7 : 1.0} // 임시 마커는 70% 투명도
             eventHandlers={{
-              click: () => handleMarkerClick(m),
-            }}
-          >
-            {selectedMarker?.id === m.id && (
-              <Popup onClose={handleClosePopup}>
-                <InfoPopup
-                  marker={m}
-                  onCreate={handleCreate}
-                  onUpdate={handleUpdate}
-                  onClose={handleClosePopup}
-                  onRemove={handleRemove}
-                  onProblemChange={handleProblemChange}
-                />
-              </Popup>
-            )}
-          </Marker>
-        ))}
+              click: () => {
+                setSelectedMarker(marker);
+                setAddMarkerEnabled(false);
+              },
+              dragend: (e) => {
+                const { lat, lng } = e.target.getLatLng();
+                if (marker.ephemeral) {
+                  setTempMarkers((prev) =>
+                    prev.map((m) =>
+                      m.id === marker.id ? { ...m, position: [lat, lng] } : m
+                    )
+                  );
 
-        {/* 저장된 마커 렌더링 */}
-        {persistedMarkers.map((m) => (
-          <Marker
-            key={`persisted-${m.id}`}
-            position={m.position}
-            draggable={false}
-            icon={m.problem ? redIcon : blueIcon}
-            eventHandlers={{
-              click: () => handleMarkerClick(m),
+                  if (selectedMarker && selectedMarker.id === marker.id) {
+                    setSelectedMarker((prev) => ({
+                      ...prev,
+                      position: [lat, lng],
+                    }));
+                  }
+                }
+              },
             }}
           >
-            {selectedMarker?.id === m.id && (
-              <Popup onClose={handleClosePopup}>
+            {selectedMarker?.id === marker.id && (
+              <Popup onClose={handlePopupClose}>
                 <InfoPopup
-                  marker={m}
-                  onCreate={handleCreate}
-                  onUpdate={handleUpdate}
-                  onClose={handleClosePopup}
-                  onRemove={isAdmin ? handleRemove : undefined}
+                  marker={marker}
+                  onCreate={handleCreateMarker}
+                  onUpdate={handleUpdateMarker}
+                  onClose={handlePopupClose}
+                  onRemove={
+                    marker.ephemeral || isAdmin ? handleRemoveMarker : undefined
+                  }
                   onProblemChange={handleProblemChange}
                 />
               </Popup>
