@@ -18,7 +18,8 @@ import redMarker from "leaflet-color-markers/img/marker-icon-red.png";
 import redMarker2x from "leaflet-color-markers/img/marker-icon-2x-red.png";
 import markerShadow from "leaflet-color-markers/img/marker-shadow.png";
 // Admin password from environment
-const ADMIN_PWD = process.env.REACT_APP_ADMIN_PASSWORD;
+const ADMIN_PWD =
+  process.env.REACT_APP_ADMIN_PASSWORD || "dongtanleejunseok123";
 
 // Fix default icon paths for React-Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -69,7 +70,7 @@ function AddMarker({ onAdd }) {
   return null;
 }
 
-export default function Map() {
+export default function Map({ apiBaseUrl = "" }) {
   const [mapCenter, setMapCenter] = useState([37.4979, 127.0276]);
   const [markers, setMarkers] = useState([]);
   const [ephemeralMarkers, setEphemeralMarkers] = useState([]);
@@ -91,7 +92,7 @@ export default function Map() {
   // Poll persisted markers every 5 seconds
   useEffect(() => {
     const fetchMarkers = () => {
-      fetch("http://localhost:4000/api/markers")
+      fetch(`${apiBaseUrl}/api/markers`)
         .then((res) => res.json())
         .then((data) => {
           const persisted = data.map((m) => ({
@@ -103,12 +104,15 @@ export default function Map() {
             problem: m.problem || false,
           }));
           setMarkers([...ephemeralMarkers, ...persisted]);
+        })
+        .catch((err) => {
+          console.error("Error fetching markers:", err);
         });
     };
     fetchMarkers();
     const id = setInterval(fetchMarkers, 5000);
     return () => clearInterval(id);
-  }, [ephemeralMarkers]);
+  }, [ephemeralMarkers, apiBaseUrl]);
 
   // Add ephemeral marker
   const handleAdd = ({ lat, lng }) => {
@@ -129,7 +133,7 @@ export default function Map() {
     const m =
       markers.find((x) => x.id === id) ||
       ephemeralMarkers.find((x) => x.id === id);
-    fetch("http://localhost:4000/api/markers", {
+    fetch(`${apiBaseUrl}/api/markers`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -149,12 +153,15 @@ export default function Map() {
         setEphemeralMarkers((prev) => prev.filter((x) => x.id !== id));
         setMarkers((prev) => [...prev, updated]);
         setSelectedMarker(updated);
+      })
+      .catch((err) => {
+        console.error("Error creating marker:", err);
       });
   };
 
   // Update in DB
   const handleUpdate = (id, data) => {
-    fetch(`http://localhost:4000/api/markers/${id}`, {
+    fetch(`${apiBaseUrl}/api/markers/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -169,17 +176,22 @@ export default function Map() {
         };
         setMarkers((prev) => prev.map((x) => (x.id === id ? updated : x)));
         setSelectedMarker(updated);
+      })
+      .catch((err) => {
+        console.error("Error updating marker:", err);
       });
   };
 
   // Remove marker
   const handleRemove = (id) => {
-    fetch(`http://localhost:4000/api/markers/${id}`, { method: "DELETE" }).then(
-      () => {
+    fetch(`${apiBaseUrl}/api/markers/${id}`, { method: "DELETE" })
+      .then(() => {
         setMarkers((prev) => prev.filter((x) => x.id !== id));
         setSelectedMarker(null);
-      }
-    );
+      })
+      .catch((err) => {
+        console.error("Error removing marker:", err);
+      });
   };
 
   // Handle coordinate search

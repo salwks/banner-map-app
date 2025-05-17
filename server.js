@@ -1,7 +1,12 @@
-// server/server.js
+// server.js
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
@@ -35,69 +40,105 @@ const TrashMarker = mongoose.model("TrashMarker", trashSchema);
 
 // 모든 마커 조회
 app.get("/api/markers", async (_req, res) => {
-  const markers = await Marker.find();
-  res.json(markers);
+  try {
+    const markers = await Marker.find();
+    res.json(markers);
+  } catch (error) {
+    console.error("Error fetching markers:", error);
+    res.status(500).json({ error: "서버 오류" });
+  }
 });
 
 // 마커 생성
 app.post("/api/markers", async (req, res) => {
-  const marker = new Marker(req.body);
-  await marker.save();
-  res.status(201).json(marker);
+  try {
+    const marker = new Marker(req.body);
+    await marker.save();
+    res.status(201).json(marker);
+  } catch (error) {
+    console.error("Error creating marker:", error);
+    res.status(500).json({ error: "서버 오류" });
+  }
 });
 
 // 마커 수정
 app.put("/api/markers/:id", async (req, res) => {
-  const updated = await Marker.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-  });
-  res.json(updated);
+  try {
+    const updated = await Marker.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating marker:", error);
+    res.status(500).json({ error: "서버 오류" });
+  }
 });
 
 // 마커 삭제: move to TrashMarker before deleting
 app.delete("/api/markers/:id", async (req, res) => {
-  const marker = await Marker.findById(req.params.id);
-  if (marker) {
-    // Copy marker data to TrashMarker
-    await TrashMarker.create({
-      position: marker.position,
-      location: marker.location,
-      photo: marker.photo,
-      status: marker.status,
-      comments: marker.comments,
-      createdAt: marker.createdAt,
-      updatedAt: marker.updatedAt,
-    });
-    await Marker.findByIdAndDelete(req.params.id);
+  try {
+    const marker = await Marker.findById(req.params.id);
+    if (marker) {
+      // Copy marker data to TrashMarker
+      await TrashMarker.create({
+        position: marker.position,
+        location: marker.location,
+        photo: marker.photo,
+        status: marker.status,
+        comments: marker.comments,
+        createdAt: marker.createdAt,
+        updatedAt: marker.updatedAt,
+      });
+      await Marker.findByIdAndDelete(req.params.id);
+    }
+    res.sendStatus(204);
+  } catch (error) {
+    console.error("Error deleting marker:", error);
+    res.status(500).json({ error: "서버 오류" });
   }
-  res.sendStatus(204);
 });
 
 // 전체 초기화: move all to TrashMarker before deleting
 app.delete("/api/markers", async (_req, res) => {
-  const markers = await Marker.find();
-  if (markers.length > 0) {
-    // Prepare data for TrashMarker
-    const trashMarkers = markers.map((marker) => ({
-      position: marker.position,
-      location: marker.location,
-      photo: marker.photo,
-      status: marker.status,
-      comments: marker.comments,
-      createdAt: marker.createdAt,
-      updatedAt: marker.updatedAt,
-    }));
-    await TrashMarker.insertMany(trashMarkers);
-    await Marker.deleteMany();
-  } else {
-    await Marker.deleteMany();
+  try {
+    const markers = await Marker.find();
+    if (markers.length > 0) {
+      // Prepare data for TrashMarker
+      const trashMarkers = markers.map((marker) => ({
+        position: marker.position,
+        location: marker.location,
+        photo: marker.photo,
+        status: marker.status,
+        comments: marker.comments,
+        createdAt: marker.createdAt,
+        updatedAt: marker.updatedAt,
+      }));
+      await TrashMarker.insertMany(trashMarkers);
+      await Marker.deleteMany();
+    } else {
+      await Marker.deleteMany();
+    }
+    res.sendStatus(204);
+  } catch (error) {
+    console.error("Error clearing markers:", error);
+    res.status(500).json({ error: "서버 오류" });
   }
-  res.sendStatus(204);
 });
 
-// MongoDB 연결 (필요에 따라 Atlas URI로 변경하세요)
+// 프로덕션 환경에서 React 앱 제공
+if (process.env.NODE_ENV === "production") {
+  // 정적 파일 제공
+  app.use(express.static(path.join(__dirname, "build")));
+
+  // API 경로가 아닌 모든 요청에 React 앱 제공
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "build", "index.html"));
+  });
+}
+
+// MongoDB 연결 (MongoDB Atlas 사용)
 mongoose
-  .connect("mongodb://localhost:27017/banner-map", {
+  .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/banner-map", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })

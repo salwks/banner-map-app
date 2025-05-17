@@ -3,16 +3,21 @@ import React, { useState, useEffect } from "react";
 import Map from "./components/Map";
 import "./App.css";
 
+// API 기본 URL 설정
+const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+
 function App() {
   const [markerCount, setMarkerCount] = useState(0);
 
   // Poll marker count every 5 seconds
   useEffect(() => {
     const fetchCount = () => {
-      fetch("http://localhost:4000/api/markers")
+      fetch(`${API_BASE_URL}/api/markers`)
         .then((res) => res.json())
         .then((data) => setMarkerCount(data.length))
-        .catch(() => {});
+        .catch((err) => {
+          console.error("Error fetching markers:", err);
+        });
     };
     // Initial fetch
     fetchCount();
@@ -36,7 +41,7 @@ function App() {
         <h1 style={{ textAlign: "left" }}>현수막 설치 지도</h1>
       </header>
 
-      <Map />
+      <Map apiBaseUrl={API_BASE_URL} />
     </div>
   );
 }
