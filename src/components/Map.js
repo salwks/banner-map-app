@@ -135,7 +135,7 @@ export default function Map() {
 
   // 마커 데이터 가져오기
   const fetchMarkers = () => {
-    fetch("http://localhost:4000/api/markers")
+    fetch("/api/markers")
       .then((res) => res.json())
       .then((data) => {
         const persisted = data.map((m) => ({
@@ -181,7 +181,7 @@ export default function Map() {
     const marker = tempMarkers.find((m) => m.id === id);
     if (!marker) return;
 
-    fetch("http://localhost:4000/api/markers", {
+    fetch("/api/markers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -210,7 +210,7 @@ export default function Map() {
 
   // DB 마커 업데이트
   const handleUpdateMarker = (id, data) => {
-    fetch(`http://localhost:4000/api/markers/${id}`, {
+    fetch(`/api/markers/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -238,7 +238,7 @@ export default function Map() {
     }
 
     // DB 마커인 경우
-    fetch(`http://localhost:4000/api/markers/${id}`, { method: "DELETE" })
+    fetch(`/api/markers/${id}`, { method: "DELETE" })
       .then(() => {
         // 삭제된 마커를 바로 반영하지 않고 fetchMarkers 호출
         fetchMarkers();
