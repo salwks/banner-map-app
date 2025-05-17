@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import Map from "./components/Map";
 import "./App.css";
 
-// API 기본 URL 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+// 개발환경에서는 상대 경로, 프로덕션 환경에서는 설정된 API URL 사용
+const isDevelopment = process.env.NODE_ENV === "development";
 
 function App() {
   const [markerCount, setMarkerCount] = useState(0);
@@ -12,7 +12,8 @@ function App() {
   // Poll marker count every 5 seconds
   useEffect(() => {
     const fetchCount = () => {
-      fetch(`${API_BASE_URL}/api/markers`)
+      // 상대 경로 사용
+      fetch("/api/markers")
         .then((res) => res.json())
         .then((data) => setMarkerCount(data.length))
         .catch((err) => {
@@ -34,14 +35,13 @@ function App() {
           stra2003@gmail.com
         </a>
         <div className="marker-count">총 현수막 수: {markerCount}</div>
-        {/* Mail link 바로 아래, 제목과 분리된 마커 카운트 */}
       </div>
 
       <header>
         <h1 style={{ textAlign: "left" }}>현수막 설치 지도</h1>
       </header>
 
-      <Map apiBaseUrl={API_BASE_URL} />
+      <Map />
     </div>
   );
 }

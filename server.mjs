@@ -1,4 +1,4 @@
-// server.js
+// server.mjs
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -67,6 +67,11 @@ app.put("/api/markers/:id", async (req, res) => {
     const updated = await Marker.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     });
+
+    if (!updated) {
+      return res.status(404).json({ error: "마커를 찾을 수 없습니다" });
+    }
+
     res.json(updated);
   } catch (error) {
     console.error("Error updating marker:", error);
@@ -77,21 +82,34 @@ app.put("/api/markers/:id", async (req, res) => {
 // 마커 삭제: move to TrashMarker before deleting
 app.delete("/api/markers/:id", async (req, res) => {
   try {
-    const marker = await Marker.findById(req.params.id);
-    if (marker) {
-      // Copy marker data to TrashMarker
-      await TrashMarker.create({
-        position: marker.position,
-        location: marker.location,
-        photo: marker.photo,
-        status: marker.status,
-        comments: marker.comments,
-        createdAt: marker.createdAt,
-        updatedAt: marker.updatedAt,
-      });
-      await Marker.findByIdAndDelete(req.params.id);
+    // MongoDB ObjectId 형식이 아닌 UUID 형식인 경우 체크
+    const id = req.params.id;
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(id);
+
+    // 임시 마커(ephemeral)의 경우 MongoDB에 없으므로 바로 성공 응답
+    if (!isValidObjectId) {
+      return res.sendStatus(204); // No Content - 성공적으로 삭제됨
     }
-    res.sendStatus(204);
+
+    const marker = await Marker.findById(id);
+
+    if (!marker) {
+      return res.status(404).json({ error: "마커를 찾을 수 없습니다" });
+    }
+
+    // Copy marker data to TrashMarker
+    await TrashMarker.create({
+      position: marker.position,
+      location: marker.location,
+      photo: marker.photo,
+      status: marker.status,
+      comments: marker.comments,
+      createdAt: marker.createdAt,
+      updatedAt: marker.updatedAt,
+    });
+
+    await Marker.findByIdAndDelete(id);
+    res.sendStatus(204); // No Content - 성공적으로 삭제됨
   } catch (error) {
     console.error("Error deleting marker:", error);
     res.status(500).json({ error: "서버 오류" });
