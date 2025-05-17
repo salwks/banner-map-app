@@ -1,9 +1,10 @@
-// server.js - CommonJS 버전
+// server.js - 클라이언트 라우팅 처리 추가
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
 const dotenv = require("dotenv");
+const fs = require("fs");
 
 // 환경 변수 로드
 dotenv.config();
@@ -13,8 +14,22 @@ app.use(cors());
 app.use(express.json());
 
 // 정적 파일 제공 (React 빌드)
-app.use(express.static(path.join(__dirname, "build")));
+console.log("Current directory:", __dirname);
+const buildPath = path.join(__dirname, "build");
+console.log("Build directory path:", buildPath);
 
+// 빌드 폴더 존재 여부 확인
+if (fs.existsSync(buildPath)) {
+  console.log("Build folder exists!");
+} else {
+  console.log("Build folder does NOT exist!");
+  // 현재 디렉토리의 파일 목록 출력
+  console.log("Files in current directory:", fs.readdirSync(__dirname));
+}
+
+app.use(express.static(buildPath));
+
+// API 엔드포인트 설정
 const markerSchema = new mongoose.Schema(
   {
     position: { type: [Number], required: true }, // [lat, lng]
@@ -29,7 +44,6 @@ const markerSchema = new mongoose.Schema(
 
 const Marker = mongoose.model("Marker", markerSchema);
 
-// TrashMarker schema/model for deleted markers
 const trashSchema = new mongoose.Schema(
   {
     position: { type: [Number], required: true },
@@ -43,7 +57,7 @@ const trashSchema = new mongoose.Schema(
 );
 const TrashMarker = mongoose.model("TrashMarker", trashSchema);
 
-// 모든 마커 조회
+// API 엔드포인트들
 app.get("/api/markers", async (req, res) => {
   try {
     const markers = await Marker.find();
@@ -54,7 +68,6 @@ app.get("/api/markers", async (req, res) => {
   }
 });
 
-// 마커 생성
 app.post("/api/markers", async (req, res) => {
   try {
     const marker = new Marker(req.body);
@@ -66,7 +79,6 @@ app.post("/api/markers", async (req, res) => {
   }
 });
 
-// 마커 수정
 app.put("/api/markers/:markerId", async (req, res) => {
   try {
     const updated = await Marker.findByIdAndUpdate(
@@ -86,7 +98,6 @@ app.put("/api/markers/:markerId", async (req, res) => {
   }
 });
 
-// 마커 삭제: move to TrashMarker before deleting
 app.delete("/api/markers/:markerId", async (req, res) => {
   try {
     const marker = await Marker.findById(req.params.markerId);
@@ -94,7 +105,6 @@ app.delete("/api/markers/:markerId", async (req, res) => {
       return res.status(404).json({ error: "Marker not found" });
     }
 
-    // Copy marker data to TrashMarker
     await TrashMarker.create({
       position: marker.position,
       location: marker.location,
@@ -113,12 +123,10 @@ app.delete("/api/markers/:markerId", async (req, res) => {
   }
 });
 
-// 전체 초기화: move all to TrashMarker before deleting
 app.delete("/api/markers", async (req, res) => {
   try {
     const markers = await Marker.find();
     if (markers.length > 0) {
-      // Prepare data for TrashMarker
       const trashMarkers = markers.map((marker) => ({
         position: marker.position,
         location: marker.location,
@@ -146,9 +154,45 @@ app.get("/api/status", (req, res) => {
   res.json({ status: "Server is running", time: new Date().toISOString() });
 });
 
-// 모든 다른 GET 요청은 React 앱으로 라우팅
+// 중요: 모든 다른 GET 요청은 React 앱으로 라우팅
+// 이 부분이 누락되었으니 추가해야 합니다
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+  const indexPath = path.join(__dirname, "build", "index.html");
+  console.log("Trying to serve index.html from:", indexPath);
+
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    console.error("index.html not found at:", indexPath);
+
+    // 가능한 대체 경로 시도
+    const alternatePaths = [
+      path.join(__dirname, "../build", "index.html"),
+      path.join(__dirname, "client/build", "index.html"),
+      path.join(__dirname, "../client/build", "index.html"),
+      path.join(__dirname, "..", "build", "index.html"),
+    ];
+
+    // 첫 번째 존재하는 파일 경로 찾기
+    const existingPath = alternatePaths.find((p) => fs.existsSync(p));
+
+    if (existingPath) {
+      console.log("Found index.html at alternate path:", existingPath);
+      res.sendFile(existingPath);
+    } else {
+      // 모든 경로를 시도했지만 index.html을 찾지 못함
+      res.status(404).send(`
+        <h1>App Error</h1>
+        <p>Could not find index.html. Tried the following paths:</p>
+        <ul>
+          <li>${indexPath}</li>
+          ${alternatePaths.map((p) => `<li>${p}</li>`).join("")}
+        </ul>
+        <p>Current directory contents:</p>
+        <pre>${JSON.stringify(fs.readdirSync(__dirname), null, 2)}</pre>
+      `);
+    }
+  }
 });
 
 // MongoDB 연결 (Atlas 또는 로컬)
