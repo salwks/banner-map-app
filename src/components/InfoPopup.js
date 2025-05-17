@@ -1,4 +1,5 @@
 // src/components/InfoPopup.js
+
 import React, { useState, useEffect } from "react";
 
 export default function InfoPopup({
@@ -7,13 +8,16 @@ export default function InfoPopup({
   onUpdate,
   onClose,
   onRemove,
+  onProblemChange,
 }) {
   const [text, setText] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [isProblem, setIsProblem] = useState(false);
   const isEditable = Boolean(marker.ephemeral);
 
   useEffect(() => {
     setText(marker.location || "");
+    setIsProblem(marker.problem || false);
     setCommentText("");
   }, [marker]);
 
@@ -24,9 +28,13 @@ export default function InfoPopup({
       alert("위치명을 입력해주세요.");
       return;
     }
-    if (isEditable) onCreate(marker.id, { location: text });
-    else onUpdate(marker.id, { location: text });
-    onClose();
+
+    // 생성 시 문제 상태도 함께 전달
+    if (isEditable) {
+      onCreate(marker.id, { location: text, problem: isProblem });
+    } else {
+      onUpdate(marker.id, { location: text });
+    }
   };
 
   const handleCommentSubmit = () => {
@@ -36,8 +44,29 @@ export default function InfoPopup({
     setCommentText("");
   };
 
+  // 문제 상태 토글 핸들러
+  const handleProblemToggle = () => {
+    const newProblemState = !isProblem;
+    setIsProblem(newProblemState);
+
+    // 상위 컴포넌트에 문제 상태 변경 알림
+    if (onProblemChange) {
+      onProblemChange(marker.id, newProblemState);
+    }
+
+    // 이미 저장된 마커인 경우 서버에도 업데이트
+    if (!isEditable) {
+      onUpdate(marker.id, { problem: newProblemState });
+    }
+  };
+
+  // 모든 클릭 이벤트가 전파되지 않도록 처리
+  const handleContainerClick = (e) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div style={{ minWidth: 240, padding: 10 }}>
+    <div style={{ minWidth: 240, padding: 10 }} onClick={handleContainerClick}>
       {isEditable ? (
         <div>
           <label htmlFor="marker-text">위치명:</label>
@@ -47,6 +76,20 @@ export default function InfoPopup({
             onChange={(e) => setText(e.target.value)}
             style={{ width: "100%" }}
           />
+
+          {/* 문제발견 체크박스 */}
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center" }}>
+            <input
+              type="checkbox"
+              id="problem-checkbox"
+              checked={isProblem}
+              onChange={handleProblemToggle}
+            />
+            <label htmlFor="problem-checkbox" style={{ marginLeft: 4 }}>
+              문제발견
+            </label>
+          </div>
+
           <div
             style={{
               marginTop: 8,
@@ -56,13 +99,23 @@ export default function InfoPopup({
           >
             {onRemove && (
               <button
-                onClick={() => onRemove(marker.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(marker.id);
+                }}
                 style={{ marginRight: 8 }}
               >
                 삭제
               </button>
             )}
-            <button onClick={handleConfirm}>확인</button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleConfirm();
+              }}
+            >
+              확인
+            </button>
           </div>
         </div>
       ) : (
@@ -73,9 +126,26 @@ export default function InfoPopup({
               ({marker.position[0].toFixed(3)}, {marker.position[1].toFixed(3)})
             </span>
           </p>
+
+          {/* 문제발견 체크박스 - 이미 저장된 마커에서도 표시 */}
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center" }}>
+            <input
+              type="checkbox"
+              id="problem-checkbox"
+              checked={isProblem}
+              onChange={handleProblemToggle}
+            />
+            <label htmlFor="problem-checkbox" style={{ marginLeft: 4 }}>
+              문제발견
+            </label>
+          </div>
+
           {onRemove && (
             <button
-              onClick={() => onRemove(marker.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(marker.id);
+              }}
               style={{ marginTop: 8 }}
             >
               삭제

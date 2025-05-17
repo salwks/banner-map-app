@@ -18,6 +18,7 @@ const markerSchema = new mongoose.Schema(
     location: String,
     photo: String,
     status: String,
+    problem: { type: Boolean, default: false }, // 문제 상태 필드
     comments: [String],
   },
   { timestamps: true }
@@ -32,6 +33,7 @@ const trashSchema = new mongoose.Schema(
     location: String,
     photo: String,
     status: String,
+    problem: { type: Boolean, default: false }, // 문제 상태 필드
     comments: [String],
   },
   { timestamps: true }
