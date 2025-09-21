@@ -25,6 +25,7 @@ export default function InfoPopup({
     setLocalLocation(marker.location || "");
     setCommentText("");
     setLocalProblem(marker.problem || false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marker.id]); // marker.id가 변경될 때만 실행 (다른 마커로 변경될 때만)
 
   // 마커 ID가 없으면 렌더링하지 않음
