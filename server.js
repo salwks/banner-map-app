@@ -156,7 +156,7 @@ app.get("/api/status", (req, res) => {
 
 // 중요: 모든 다른 GET 요청은 React 앱으로 라우팅
 // 이 부분이 누락되었으니 추가해야 합니다
-app.get("*", (req, res) => {
+app.get("/*", (req, res) => {
   const indexPath = path.join(__dirname, "build", "index.html");
   console.log("Trying to serve index.html from:", indexPath);
 
