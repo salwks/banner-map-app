@@ -7,12 +7,12 @@ const FloatingHeader = ({ markerCount }) => {
       <Card className="w-80 backdrop-blur-sm bg-white/95 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl font-bold text-gray-800">
-            현수막 설치 지도
+            Visual Pollution Issue Map
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-600">총 현수막 수:</span>
+            <span className="text-gray-600">Total Issues:</span>
             <span className="font-semibold text-lg text-blue-600">{markerCount}</span>
           </div>
           <div className="mt-3 pt-3 border-t border-gray-200">

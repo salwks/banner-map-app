@@ -92,16 +92,30 @@ function MarkerOpacityStyles() {
 }
 
 // Handle map clicks to add markers, ignore popups/buttons
-function MapClicker({ onAdd, isPopupOpen, addMarkerEnabled }) {
+function MapClicker({ onAdd, isPopupOpen, addMarkerEnabled, onMapClick }) {
   useMapEvents({
     click(e) {
-      // 팝업이 열려있거나 마커 추가가 비활성화되어 있으면 새 마커를 추가하지 않음
-      if (isPopupOpen || !addMarkerEnabled) {
+      const tgt = e.originalEvent.target;
+
+      // 팝업 내부 클릭은 무시
+      if (tgt.closest(".leaflet-popup")) {
         return;
       }
 
-      const tgt = e.originalEvent.target;
-      if (tgt.closest(".leaflet-popup") || tgt.closest("button")) return;
+      // 팝업이 열려있으면 먼저 닫기
+      if (isPopupOpen) {
+        onMapClick(); // 팝업 닫기
+        return;
+      }
+
+      // 마커 추가가 비활성화되어 있으면 새 마커를 추가하지 않음
+      if (!addMarkerEnabled) {
+        return;
+      }
+
+      // 버튼 클릭은 무시
+      if (tgt.closest("button")) return;
+
       onAdd({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
@@ -365,6 +379,7 @@ export default function Map() {
           onAdd={handleAddMarker}
           isPopupOpen={isPopupOpen}
           addMarkerEnabled={addMarkerEnabled}
+          onMapClick={handlePopupClose}
         />
 
         {allMarkers.map((marker) => (
