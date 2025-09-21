@@ -1,10 +1,11 @@
 // src/App.js
 import React, { useState, useEffect } from "react";
 import Map from "./components/Map";
+import FloatingHeader from "./components/FloatingHeader";
 import "./App.css";
 
 // 개발환경에서는 상대 경로, 프로덕션 환경에서는 설정된 API URL 사용
-const isDevelopment = process.env.NODE_ENV === "development";
+// const isDevelopment = process.env.NODE_ENV === "development";
 
 function App() {
   const [markerCount, setMarkerCount] = useState(0);
@@ -29,19 +30,11 @@ function App() {
   }, []);
 
   return (
-    <div className="App">
-      <div className="email-link-container">
-        <a href="mailto:stra2003@gmail.com" className="email-link">
-          stra2003@gmail.com
-        </a>
-        <div className="marker-count">총 현수막 수: {markerCount}</div>
+    <div className="relative h-screen w-screen">
+      <FloatingHeader markerCount={markerCount} />
+      <div className="absolute inset-0 pointer-events-auto">
+        <Map />
       </div>
-
-      <header>
-        <h1 style={{ textAlign: "left" }}>현수막 설치 지도</h1>
-      </header>
-
-      <Map />
     </div>
   );
 }

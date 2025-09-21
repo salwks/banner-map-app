@@ -50,10 +50,15 @@ app.post("/api/markers", async (req, res) => {
 
 // 마커 수정
 app.put("/api/markers/:id", async (req, res) => {
-  const updated = await Marker.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-  });
-  res.json(updated);
+  try {
+    const updated = await Marker.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("마커 업데이트 에러:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // 마커 삭제: move to TrashMarker before deleting

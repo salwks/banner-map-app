@@ -1,5 +1,9 @@
 // src/components/InfoPopup.js
 import React, { useState, useEffect } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
 
 export default function InfoPopup({
   marker = {},
@@ -18,7 +22,6 @@ export default function InfoPopup({
 
   // 마커가 변경될 때만 상태 초기화
   useEffect(() => {
-    console.log("마커 변경됨: ", marker);
     setLocalLocation(marker.location || "");
     setCommentText("");
     setLocalProblem(marker.problem || false);
@@ -51,118 +54,108 @@ export default function InfoPopup({
   // 댓글 등록 핸들러
   const handleCommentSubmit = () => {
     if (!commentText.trim()) return;
+
     const comments = marker.comments || [];
     onUpdate(marker.id, { comments: [...comments, commentText] });
     setCommentText("");
   };
 
   // 문제 상태 변경 핸들러
-  const handleProblemChange = (e) => {
-    const newProblemValue = e.target.checked;
-
+  const handleProblemChange = (checked) => {
     // 내부 상태만 업데이트
-    setLocalProblem(newProblemValue);
+    setLocalProblem(checked);
 
     // 색상 변경을 위해 부모에게 알림
     if (onProblemChange) {
-      onProblemChange(marker.id, newProblemValue);
+      onProblemChange(marker.id, checked);
     }
   };
 
   return (
-    <div style={{ minWidth: 240, padding: 10 }}>
+    <div className="min-w-60 p-4 space-y-4">
       {isEditable ? (
-        <div>
-          <label htmlFor="marker-text">위치명:</label>
-          <input
-            id="marker-text"
-            value={localLocation}
-            onChange={(e) => setLocalLocation(e.target.value)}
-            style={{ width: "100%", marginBottom: "8px" }}
-          />
-
-          <div style={{ marginBottom: "8px" }}>
-            <label>
-              <input
-                type="checkbox"
-                checked={localProblem}
-                onChange={handleProblemChange}
-              />
-              문제 있음
-            </label>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="marker-text">위치명:</Label>
+            <Input
+              id="marker-text"
+              value={localLocation}
+              onChange={(e) => setLocalLocation(e.target.value)}
+              placeholder="위치명을 입력하세요"
+            />
           </div>
 
-          <div
-            style={{
-              marginTop: 8,
-              display: "flex",
-              justifyContent: "flex-end",
-            }}
-          >
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="problem-checkbox"
+              checked={localProblem}
+              onCheckedChange={handleProblemChange}
+            />
+            <Label htmlFor="problem-checkbox">문제 있음</Label>
+          </div>
+
+          <div className="flex justify-end space-x-2">
             {onRemove && (
-              <button
+              <Button
                 onClick={() => onRemove(marker.id)}
-                style={{ marginRight: 8 }}
+                variant="destructive"
+                size="sm"
               >
                 삭제
-              </button>
+              </Button>
             )}
-            <button onClick={handleConfirm}>확인</button>
+            <Button onClick={handleConfirm} size="sm">
+              확인
+            </Button>
           </div>
         </div>
       ) : (
-        <div>
-          <p style={{ margin: 0 }}>
-            <span>{marker.location}</span>
-            <span style={{ color: "gray", fontSize: "8pt", marginLeft: 4 }}>
+        <div className="space-y-3">
+          <div>
+            <h3 className="font-semibold text-lg">{marker.location}</h3>
+            <p className="text-gray-500 text-xs">
               ({marker.position[0].toFixed(3)}, {marker.position[1].toFixed(3)})
-            </span>
-          </p>
+            </p>
+          </div>
 
-          <div style={{ marginTop: "4px" }}>
-            <label>
-              <input
-                type="checkbox"
-                checked={localProblem}
-                onChange={handleProblemChange}
-              />
-              문제 있음
-            </label>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="problem-checkbox-view"
+              checked={localProblem}
+              onCheckedChange={handleProblemChange}
+            />
+            <Label htmlFor="problem-checkbox-view">문제 있음</Label>
           </div>
 
           {onRemove && (
-            <button
+            <Button
               onClick={() => onRemove(marker.id)}
-              style={{ marginTop: 8 }}
+              variant="destructive"
+              size="sm"
+              className="w-full"
             >
               삭제
-            </button>
+            </Button>
           )}
         </div>
       )}
-      <div style={{ marginTop: 12, width: "100%", boxSizing: "border-box" }}>
-        {(marker.comments || []).map((c, i) => (
-          <p
-            key={i}
-            style={{
-              background: "#f0f0f0",
-              padding: "4px",
-              borderRadius: "4px",
-            }}
-          >
-            {c}
-          </p>
-        ))}
+      <div className="mt-4 space-y-3">
+        {(marker.comments || []).length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">댓글</Label>
+            {(marker.comments || []).map((c, i) => (
+              <div
+                key={i}
+                className="bg-gray-100 p-3 rounded-md text-sm"
+              >
+                {c}
+              </div>
+            ))}
+          </div>
+        )}
         {!isEditable && (
-          <div
-            style={{
-              position: "relative",
-              marginTop: 8,
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          >
-            <input
+          <div className="relative">
+            <Input
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               onKeyPress={(e) => {
@@ -172,23 +165,15 @@ export default function InfoPopup({
                 }
               }}
               placeholder="댓글을 입력하세요"
-              style={{
-                width: "100%",
-                paddingRight: "24px",
-                boxSizing: "border-box",
-              }}
+              className="pr-12"
             />
-            <span
-              style={{
-                position: "absolute",
-                right: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-              }}
-              title="댓글 등록"
+            <Button
+              size="sm"
+              className="absolute right-1 top-1 h-8 px-2"
+              onClick={handleCommentSubmit}
             >
-              ⏎
-            </span>
+              +
+            </Button>
           </div>
         )}
       </div>

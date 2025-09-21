@@ -7,11 +7,13 @@ import {
   Popup,
   useMapEvents,
   useMap,
+  ZoomControl,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { v4 as uuidv4 } from "uuid";
 import InfoPopup from "./InfoPopup";
+import AdminControls from "./AdminControls";
 import blueMarker from "leaflet-color-markers/img/marker-icon-blue.png";
 import blueMarker2x from "leaflet-color-markers/img/marker-icon-2x-blue.png";
 import redMarker from "leaflet-color-markers/img/marker-icon-red.png";
@@ -311,6 +313,17 @@ export default function Map() {
     setAddMarkerEnabled(true); // 팝업이 닫히면 마커 추가 다시 활성화
   };
 
+  // 관리자 모드 토글 처리
+  const handleAdminToggle = () => {
+    if (!isAdmin) {
+      const pwd = window.prompt("관리자 비밀번호를 입력하세요:");
+      if (pwd === ADMIN_PWD) setIsAdmin(true);
+      else alert("비밀번호가 올바르지 않습니다.");
+    } else {
+      setIsAdmin(false);
+    }
+  };
+
   // 마커 아이콘 선택 함수
   const getMarkerIcon = (marker) => {
     if (marker.ephemeral) {
@@ -330,53 +343,23 @@ export default function Map() {
       {/* 투명도 스타일 적용 */}
       <MarkerOpacityStyles />
 
-      {/* Admin Mode Toggle and Search */}
-      <div
-        style={{
-          position: "absolute",
-          top: 10,
-          left: 10,
-          zIndex: 1000,
-          padding: "8px",
-          borderRadius: "4px",
-        }}
-      >
-        <button
-          onClick={() => {
-            if (!isAdmin) {
-              const pwd = window.prompt("관리자 비밀번호를 입력하세요:");
-              if (pwd === ADMIN_PWD) setIsAdmin(true);
-              else alert("비밀번호가 올바르지 않습니다.");
-            } else {
-              setIsAdmin(false);
-            }
-          }}
-          title={isAdmin ? "관리자 모드 활성" : "관리자 모드 비활성"}
-        >
-          <span role="img" aria-label="settings">
-            ⚙️
-          </span>
-        </button>
-        {isAdmin && (
-          <div style={{ marginTop: 8 }}>
-            <input
-              type="text"
-              placeholder="위치명 검색"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              style={{ width: "120px", marginRight: 4 }}
-            />
-            <button onClick={handleSearch}>이동</button>
-          </div>
-        )}
-      </div>
+      {/* Admin Controls */}
+      <AdminControls
+        isAdmin={isAdmin}
+        searchText={searchText}
+        setSearchText={setSearchText}
+        onAdminToggle={handleAdminToggle}
+        onSearch={handleSearch}
+      />
       <MapContainer
         center={mapCenter}
         zoom={13}
-        style={{ height: "100vh", width: "100%" }}
+        style={{ height: "100%", width: "100%" }}
         ref={mapRef}
+        zoomControl={false}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <ZoomControl position="bottomleft" />
         <FitToRadius center={mapCenter} />
         <MapClicker
           onAdd={handleAddMarker}
